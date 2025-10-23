@@ -14,7 +14,10 @@ def get_connection():
         print("❌ Database connection error:", e)
         return None
 
-# Function to add a new stall owner
+
+# =========================
+# Function: Add Stall Owner
+# =========================
 def add_stall_owner(name, location):
     try:
         conn = get_connection()
@@ -35,13 +38,14 @@ def add_stall_owner(name, location):
         print("❌ Error adding stall owner:", e)
 
     finally:
-        try:
+        if conn:
             cursor.close()
             conn.close()
-        except:
-            pass
 
-# Function to add a new product
+
+# =====================
+# Function: Add Product
+# =====================
 def add_product(owner_id, name, price, stock):
     try:
         conn = get_connection()
@@ -63,13 +67,46 @@ def add_product(owner_id, name, price, stock):
         return None
 
     finally:
-        try:
+        if conn:
             cursor.close()
             conn.close()
-        except:
-            pass
 
-# Function to make a sale
+
+# ==================
+# Function: View Products
+# ==================
+def view_products():
+    try:
+        conn = get_connection()
+        if not conn:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, price, stock FROM products;")
+        products = cursor.fetchall()
+
+        if not products:
+            print("ℹ️ No products found in the database.")
+            return
+
+        print("\n📦 Available Products:")
+        print("-" * 40)
+        for product in products:
+            print(f"ID: {product[0]}, Name: {product[1]}, Price: R{product[2]:.2f}, Stock: {product[3]}")
+        print("-" * 40)
+
+    except Exception as e:
+        print("❌ Error viewing products:", e)
+
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+
+# ==================
+# Function: Make Sale
+# ==================
 def make_sale(product_name, quantity):
     try:
         conn = get_connection()
@@ -77,40 +114,43 @@ def make_sale(product_name, quantity):
             return
 
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, stock FROM products WHERE name = %s;",
-            (product_name,)
-        )
+        cursor.execute("SELECT id, price, stock FROM products WHERE name = %s;", (product_name,))
         product = cursor.fetchone()
 
         if not product:
             print("❌ Product not found.")
             return
 
-        product_id, stock = product
+        product_id, price, stock = product
         if stock < quantity:
             print("❌ Insufficient stock.")
             return
 
-        # Update stock
+        total_amount = price * quantity
+
+        # Record the sale
         cursor.execute(
-            "UPDATE products SET stock = stock - %s WHERE id = %s;",
-            (quantity, product_id)
+            "INSERT INTO sales (product_id, quantity, total_amount) VALUES (%s, %s, %s);",
+            (product_id, quantity, total_amount)
         )
+
+        # Update stock
+        cursor.execute("UPDATE products SET stock = stock - %s WHERE id = %s;", (quantity, product_id))
         conn.commit()
-        print(f"✅ Sale made: {quantity} x {product_name}")
+        print(f"✅ Sale recorded: {quantity} x {product_name} for R{total_amount:.2f}")
 
     except Exception as e:
         print("❌ Error making sale:", e)
 
     finally:
-        try:
+        if conn:
             cursor.close()
             conn.close()
-        except:
-            pass
 
-# Function to generate a weekly report
+
+# =======================
+# Function: Weekly Report
+# =======================
 def weekly_report():
     try:
         conn = get_connection()
@@ -126,33 +166,34 @@ def weekly_report():
         """)
         report = cursor.fetchall()
 
-        print("📊 Weekly Sales Report:")
+        if not report:
+            print("ℹ️ No sales data available for this week.")
+            return
+
+        print("\n📊 Weekly Sales Report:")
+        print("-" * 50)
         for row in report:
-            print(f"Product: {row[0]}, Total Sold: {row[1]}, Total Revenue: ${row[2]:.2f}")
+            print(f"Product: {row[0]}, Total Sold: {row[1]}, Total Revenue: R{row[2]:.2f}")
+        print("-" * 50)
 
     except Exception as e:
         print("❌ Error generating report:", e)
 
     finally:
-        try:
+        if conn:
             cursor.close()
             conn.close()
-        except:
-            pass
 
-# -----------------------------
+
+# ==================
+# Main Program Menu
+# ==================
 def main():
     print("🌍 Sawubona! Welcome to Mzansi Market Tracker!")
 
-    # Step 1: Setup
+    # Create tables if not exist
     create_tables()
 
-    # Step 2: Sample data
-    owner_id = add_stall_owner("John's Fresh Produce", "Downtown Market")
-    add_product(owner_id, "Apples", 0.50, 100)
-    add_product(owner_id, "Bananas", 0.30, 150)
-
-    # Step 3: Interactive menu
     menu = {
         "1": "Add Stall Owner",
         "2": "Add Product",
@@ -161,6 +202,8 @@ def main():
         "5": "Weekly Report",
         "6": "Exit"
     }
+
+    current_owner_id = None
 
     while True:
         print("\n===== Mzansi Market Menu =====")
@@ -172,16 +215,19 @@ def main():
         if choice == "1":
             name = input("Enter stall owner name: ")
             location = input("Enter stall location: ")
-            add_stall_owner(name, location)
+            current_owner_id = add_stall_owner(name, location)
 
         elif choice == "2":
+            if not current_owner_id:
+                print("⚠️ Please add a stall owner first.")
+                continue
             product_name = input("Enter product name: ")
             price = float(input("Enter product price: "))
             quantity = int(input("Enter product quantity: "))
-            add_product(owner_id, product_name, price, quantity)
+            add_product(current_owner_id, product_name, price, quantity)
 
         elif choice == "3":
-            print("Viewing products... (in a real app, this would fetch from the database)")
+            view_products()
 
         elif choice == "4":
             product_name = input("Enter product sold: ")
@@ -198,6 +244,7 @@ def main():
         else:
             print("❌ Invalid choice. Please try again.")
 
-# -----------------------------
+
+# Run Program
 if __name__ == "__main__":
     main()
