@@ -3,6 +3,10 @@ import csv
 from datetime import datetime
 from db_setup import create_tables
 
+
+# =========================
+# Function: Get Connection
+# =========================
 def get_connection():
     try:
         conn = psycopg2.connect(
@@ -109,21 +113,32 @@ def view_products():
 # ==================
 # Function: Make Sale
 # ==================
-def make_sale(product_name, quantity):
+def make_sale(product_input, quantity):
+    """
+    Allows making a sale by entering product ID or product name.
+    """
     try:
         conn = get_connection()
         if not conn:
             return
 
         cursor = conn.cursor()
-        cursor.execute("SELECT id, price, stock FROM products WHERE name = %s;", (product_name,))
+
+        # Try to interpret input as ID first
+        try:
+            product_id = int(product_input)
+            cursor.execute("SELECT id, name, price, stock FROM products WHERE id = %s;", (product_id,))
+        except ValueError:
+            # If not an integer, treat as product name
+            cursor.execute("SELECT id, name, price, stock FROM products WHERE name = %s;", (product_input,))
+
         product = cursor.fetchone()
 
         if not product:
             print("❌ Product not found.")
             return
 
-        product_id, price, stock = product
+        product_id, product_name, price, stock = product
         if stock < quantity:
             print("❌ Insufficient stock.")
             return
@@ -148,7 +163,6 @@ def make_sale(product_name, quantity):
         if conn:
             cursor.close()
             conn.close()
-
 
 # =======================
 # Function: Weekly Report
@@ -185,28 +199,31 @@ def weekly_report():
         if conn:
             cursor.close()
             conn.close()
-            
-            
-            
-            
-def export_report_to_csv(filename="weekly_report.csv"):
+
+
+# ============================
+# Function: Export Report to CSV
+# ============================
+def export_report_to_csv():
     try:
         conn = get_connection()
         if not conn:
             return
 
         cursor = conn.cursor()
+        # Get products and their sales (if any)
         cursor.execute("""
-            SELECT p.name, SUM(s.quantity) AS total_sold, SUM(s.total_amount) AS total_revenue
-            FROM sales s
-            JOIN products p ON s.product_id = p.id
+            SELECT p.name,
+                COALESCE(SUM(s.quantity), 0) AS total_sold,
+                COALESCE(SUM(s.total_amount), 0) AS total_revenue
+            FROM products p
+            LEFT JOIN sales s ON s.product_id = p.id
             GROUP BY p.name;
         """)
         report = cursor.fetchall()
 
-        if not report:
-            print("ℹ️ No sales data available to export.")
-            return
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        filename = f"weekly_report_{date_str}.csv"
 
         with open(filename, mode='w', newline='') as file:
             writer = csv.writer(file)
@@ -222,7 +239,8 @@ def export_report_to_csv(filename="weekly_report.csv"):
     finally:
         if conn:
             cursor.close()
-            conn.close()          
+            conn.close()
+
 
 
 # ==================
@@ -240,7 +258,8 @@ def main():
         "3": "View Products",
         "4": "Make Sale",
         "5": "Weekly Report",
-        "6": "Exit"
+        "6": "Export Weekly Report to CSV",
+        "7": "Exit"
     }
 
     current_owner_id = None
@@ -278,14 +297,18 @@ def main():
             weekly_report()
 
         elif choice == "6":
-            print("Exiting the program. Hamba kahle! 👋")
+            export_report_to_csv()
+
+        elif choice == "7":
+            print("👋 Exiting the program. Hamba kahle!")
             break
 
         else:
             print("❌ Invalid choice. Please try again.")
 
 
+# ==================
 # Run Program
+# ==================
 if __name__ == "__main__":
     main()
-
