@@ -1,4 +1,6 @@
 import psycopg2
+import csv
+from datetime import datetime
 from db_setup import create_tables
 
 def get_connection():
@@ -183,6 +185,44 @@ def weekly_report():
         if conn:
             cursor.close()
             conn.close()
+            
+            
+            
+            
+def export_report_to_csv(filename="weekly_report.csv"):
+    try:
+        conn = get_connection()
+        if not conn:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT p.name, SUM(s.quantity) AS total_sold, SUM(s.total_amount) AS total_revenue
+            FROM sales s
+            JOIN products p ON s.product_id = p.id
+            GROUP BY p.name;
+        """)
+        report = cursor.fetchall()
+
+        if not report:
+            print("ℹ️ No sales data available to export.")
+            return
+
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Product", "Total Sold", "Total Revenue"])
+            for row in report:
+                writer.writerow([row[0], row[1], f"R{row[2]:.2f}"])
+
+        print(f"✅ Weekly report exported successfully to {filename}!")
+
+    except Exception as e:
+        print("❌ Error exporting report to CSV:", e)
+
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()          
 
 
 # ==================
@@ -248,3 +288,4 @@ def main():
 # Run Program
 if __name__ == "__main__":
     main()
+
