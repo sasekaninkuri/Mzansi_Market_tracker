@@ -23,12 +23,14 @@ def create_tables():
     try:
         cursor = conn.cursor()
 
-        # Create stall_owners table
+        # Create stall_owners table with username & password
         create_stall_owners = """
         CREATE TABLE IF NOT EXISTS stall_owners (
             id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            location VARCHAR(150)
+            name VARCHAR(255) NOT NULL,
+            location VARCHAR(255),
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password VARCHAR(255) NOT NULL
         );
         """
 
@@ -59,7 +61,6 @@ def create_tables():
         cursor.execute(create_products)
         cursor.execute(create_sales)
 
-        # Commit changes
         conn.commit()
         print("✅ Tables created successfully!")
 
@@ -71,6 +72,5 @@ def create_tables():
         conn.close()
         print("✅ Database setup complete.")
 
-# Run the function
-create_tables()
-
+if __name__ == "__main__":
+    create_tables()
