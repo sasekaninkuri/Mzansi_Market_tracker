@@ -1,12 +1,10 @@
 import psycopg2
 import csv
 from datetime import datetime
+
 from db_setup import create_tables
 
 
-# =========================
-# Function: Get Connection
-# =========================
 def get_connection():
     try:
         conn = psycopg2.connect(
@@ -21,9 +19,6 @@ def get_connection():
         return None
 
 
-# =========================
-# Function: Add Stall Owner
-# =========================
 def add_stall_owner(name, location):
     try:
         conn = get_connection()
@@ -49,9 +44,6 @@ def add_stall_owner(name, location):
             conn.close()
 
 
-# =====================
-# Function: Add Product
-# =====================
 def add_product(owner_id, name, price, stock):
     try:
         conn = get_connection()
@@ -78,9 +70,7 @@ def add_product(owner_id, name, price, stock):
             conn.close()
 
 
-# ==================
-# Function: View Products
-# ==================
+
 def view_products():
     try:
         conn = get_connection()
@@ -110,13 +100,10 @@ def view_products():
             conn.close()
 
 
-# ==================
-# Function: Make Sale
-# ==================
+
+from datetime import datetime
+
 def make_sale(product_input, quantity):
-    """
-    Allows making a sale by entering product ID or product name.
-    """
     try:
         conn = get_connection()
         if not conn:
@@ -144,11 +131,12 @@ def make_sale(product_input, quantity):
             return
 
         total_amount = price * quantity
+        sale_date = datetime.now()  # add current date
 
-        # Record the sale
+        # Record the sale with sale_date
         cursor.execute(
-            "INSERT INTO sales (product_id, quantity, total_amount) VALUES (%s, %s, %s);",
-            (product_id, quantity, total_amount)
+            "INSERT INTO sales (product_id, quantity, total_amount, sale_date) VALUES (%s, %s, %s, %s);",
+            (product_id, quantity, total_amount, sale_date)
         )
 
         # Update stock
@@ -164,9 +152,8 @@ def make_sale(product_input, quantity):
             cursor.close()
             conn.close()
 
-# =======================
-# Function: Weekly Report
-# =======================
+
+
 def weekly_report():
     try:
         conn = get_connection()
@@ -183,7 +170,7 @@ def weekly_report():
         report = cursor.fetchall()
 
         if not report:
-            print("ℹ️ No sales data available for this week.")
+            print("No sales data available for this week.")
             return
 
         print("\n📊 Weekly Sales Report:")
@@ -201,9 +188,9 @@ def weekly_report():
             conn.close()
 
 
-# ============================
-# Function: Export Report to CSV
-# ============================
+
+
+
 def export_report_to_csv():
     try:
         conn = get_connection()
@@ -211,25 +198,46 @@ def export_report_to_csv():
             return
 
         cursor = conn.cursor()
-        # Get products and their sales (if any)
+
+       
         cursor.execute("""
-            SELECT p.name,
-                COALESCE(SUM(s.quantity), 0) AS total_sold,
-                COALESCE(SUM(s.total_amount), 0) AS total_revenue
+            SELECT 
+                p.name AS product_name,
+                so.name AS owner_name,
+                so.location AS stall_location,
+                p.price AS price_per_item,
+                p.stock AS current_stock,
+                SUM(s.quantity) AS total_sold,
+                SUM(s.total_amount) AS total_revenue
             FROM products p
+            JOIN stall_owners so ON p.owner_id = so.id
             LEFT JOIN sales s ON s.product_id = p.id
-            GROUP BY p.name;
+            GROUP BY p.id, p.name, so.name, so.location, p.price, p.stock
+            ORDER BY so.name, p.name;
         """)
         report = cursor.fetchall()
+
+        import pandas as pd
+        df_report = pd.DataFrame(report, columns=[
+            "Product", "Owner", "Location", "Price per Item", "Current Stock", "Total Sold", "Total Revenue"
+        ])
 
         date_str = datetime.now().strftime("%Y-%m-%d")
         filename = f"weekly_report_{date_str}.csv"
 
+     
         with open(filename, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Product", "Total Sold", "Total Revenue"])
+            writer.writerow(df_report.columns)
             for row in report:
-                writer.writerow([row[0], row[1], f"R{row[2]:.2f}"])
+                product = row[0]
+                owner = row[1]
+                location = row[2]
+                price = f"R{float(row[3]):.2f}"
+                stock = row[4]
+                total_sold = int(row[5]) if row[5] is not None else 0
+                total_revenue = f"R{float(row[6]):.2f}" if row[6] is not None else "R0.00"
+                writer.writerow([product, owner, location, price, stock, total_sold, total_revenue])
 
         print(f"✅ Weekly report exported successfully to {filename}!")
 
@@ -243,9 +251,10 @@ def export_report_to_csv():
 
 
 
-# ==================
-# Main Program Menu
-# ==================
+
+
+
+
 def main():
     print("🌍 Sawubona! Welcome to Mzansi Market Tracker!")
 
@@ -307,8 +316,6 @@ def main():
             print("❌ Invalid choice. Please try again.")
 
 
-# ==================
-# Run Program
-# ==================
+
 if __name__ == "__main__":
     main()
